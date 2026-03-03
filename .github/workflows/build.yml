@@ -99,6 +99,11 @@ jobs:
           echo "QT_DIR=$qtDir" >> $env:GITHUB_ENV
           echo "CURL_DIR=$curlDir" >> $env:GITHUB_ENV
 
+      - name: Run MOC (before Premake so generated/*.cpp exists for glob)
+        shell: cmd
+        run: |
+          call scripts\run_moc.bat "%QT_DIR%\bin\moc.exe" "src" "generated"
+
       - name: Generate project (Premake)
         run: vendor\premake\windows\premake5.exe vs2022
 
