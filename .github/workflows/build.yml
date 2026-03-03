@@ -151,10 +151,11 @@ jobs:
 
       - name: Build NSIS Installer
         if: matrix.config == 'Release'
+        shell: cmd
         run: |
           choco install nsis -y --no-progress
           cd installer
-          makensis checkdown.nsi
+          "%ProgramFiles(x86)%\NSIS\makensis.exe" checkdown.nsi
 
       - name: Upload build artifacts
         if: matrix.config == 'Release'
