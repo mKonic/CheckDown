@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CheckDown</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo-row">
+      <img src="../icons/icon32.png" alt="CheckDown" class="logo">
+      <h1>CheckDown</h1>
+    </div>
+    <div class="status-row">
+      <span class="status-dot" id="statusDot"></span>
+      <span class="status-text" id="statusText">Checking...</span>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="controls">
+    <label class="toggle-row">
+      <span class="toggle-label">Auto-intercept downloads</span>
+      <input type="checkbox" id="autoIntercept" class="toggle-input">
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="add-url-section">
+    <h2>Add URL</h2>
+    <input type="url" id="urlInput" placeholder="https://example.com/file.zip" spellcheck="false">
+    <button id="addBtn" class="btn-primary">Download with CheckDown</button>
+  </div>
+
+  <div class="footer">
+    <span>v1.0.0</span>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

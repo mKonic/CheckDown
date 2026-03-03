@@ -1,0 +1,41 @@
+# Build outputs
+bin/
+obj/
+build/
+generated/
+
+# Dependencies (downloaded/built locally)
+deps/
+vendor/json/
+vendor/premake/
+
+# IDE / Editor
+.vs/
+.vscode/
+*.user
+*.suo
+*.ncb
+*.sdf
+*.opensdf
+*.aps
+
+# NSIS installer output
+installer/CheckDown-Setup.exe
+installer/vcredist/
+
+# NSIS downloaded installer
+deps/nsis-install.exe
+
+# Python / aqtinstall
+aqtinstall.log
+generate_icons.py
+__pycache__/
+*.pyc
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Claude
+.claude/

@@ -1,0 +1,8 @@
+<!-- CheckDown resource file. Add icon files here when available.
+     To use: uncomment the entry and place checkdown.ico in this directory.
+     Then enable the RCC prebuild step in premake5.lua. -->
+<RCC>
+    <qresource prefix="/">
+        <!-- <file>checkdown.ico</file> -->
+    </qresource>
+</RCC>
