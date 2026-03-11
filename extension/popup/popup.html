@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CheckDown</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-row">
+      <img src="../icons/icon32.png" alt="CheckDown" class="logo">
+      <h1>CheckDown</h1>
+    </div>
+    <div class="status-row">
+      <span class="status-dot" id="statusDot"></span>
+      <span class="status-text" id="statusText">Checking...</span>
+      <span class="active-badge" id="activeBadge" style="display:none"></span>
+    </div>
+  </div>
+
+  <!-- Tab Bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="main">Downloads</button>
+    <button class="tab-btn" data-tab="media">Video</button>
+  </div>
+
+  <!-- ── Downloads Tab ── -->
+  <div class="tab-pane" id="tab-main">
+    <div class="controls">
+      <label class="toggle-row">
+        <span class="toggle-label">Auto-intercept downloads</span>
+        <input type="checkbox" id="autoIntercept" class="toggle-input">
+        <span class="toggle-slider"></span>
+      </label>
+      <label class="toggle-row cookie-toggle-row hidden" id="cookieToggleRow">
+        <span class="toggle-label cookie-toggle-label" id="cookieToggleLabel">Send cookies for this site</span>
+        <input type="checkbox" id="cookieSiteToggle" class="toggle-input">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="add-url-section">
+      <h2>Add URL</h2>
+      <input type="url" id="urlInput" placeholder="https://example.com/file.zip" spellcheck="false">
+      <button id="addBtn" class="btn-primary" disabled>Download with CheckDown</button>
+    </div>
+  </div>
+
+  <!-- ── Video Tab ── -->
+  <div class="tab-pane hidden" id="tab-media">
+    <div id="mediaList" class="media-list">
+      <div class="media-empty" id="mediaEmpty">
+        Navigate to YouTube, TikTok, or Instagram<br>to see download options here.
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>v1.2.0</span>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

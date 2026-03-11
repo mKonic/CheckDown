@@ -1,0 +1,216 @@
+name: Build & Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  QT_VERSION: "6.8.3"
+  PREMAKE_VERSION: "5.0.0-beta8"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        config: [Release]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------------
+      # Dependencies
+      # ---------------------------------------------------------------
+      - name: Cache Qt
+        id: cache-qt
+        uses: actions/cache@v4
+        with:
+          path: deps/qt
+          key: qt-${{ env.QT_VERSION }}-msvc2022_64
+
+      - name: Install Qt
+        if: steps.cache-qt.outputs.cache-hit != 'true'
+        run: |
+          pip install aqtinstall
+          aqt install-qt windows desktop ${{ env.QT_VERSION }} win64_msvc2022_64 `
+            --outputdir deps/qt `
+            --modules qtnetworkauth
+
+      - name: Cache libcurl
+        id: cache-curl
+        uses: actions/cache@v4
+        with:
+          path: deps/curl-install
+          key: curl-8.14.0-msvc-static
+
+      - name: Build libcurl
+        if: steps.cache-curl.outputs.cache-hit != 'true'
+        shell: cmd
+        run: |
+          curl -L -o deps\curl.tar.gz https://curl.se/download/curl-8.14.0.tar.gz
+          cd deps && tar -xzf curl.tar.gz
+          mkdir curl-build && cd curl-build
+          cmake ..\curl-8.14.0 ^
+            -G "Visual Studio 17 2022" -A x64 ^
+            -DCMAKE_INSTALL_PREFIX=..\curl-install ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DBUILD_SHARED_LIBS=OFF ^
+            -DBUILD_CURL_EXE=OFF ^
+            -DCURL_USE_SCHANNEL=ON ^
+            -DCURL_USE_LIBPSL=OFF ^
+            -DCURL_BROTLI=OFF ^
+            -DCURL_ZSTD=OFF ^
+            -DUSE_NGHTTP2=OFF ^
+            -DUSE_LIBIDN2=OFF ^
+            -DCURL_DISABLE_LDAP=ON ^
+            -DBUILD_LIBCURL_DOCS=OFF ^
+            -DBUILD_MISC_DOCS=OFF
+          cmake --build . --config Release
+          cmake --install . --config Release
+
+      - name: Download nlohmann/json
+        run: |
+          New-Item -ItemType Directory -Force -Path vendor\json\include\nlohmann
+          Invoke-WebRequest `
+            -Uri "https://github.com/nlohmann/json/releases/download/v3.12.0/json.hpp" `
+            -OutFile "vendor\json\include\nlohmann\json.hpp"
+
+      - name: Download Premake5
+        run: |
+          New-Item -ItemType Directory -Force -Path vendor\premake\windows
+          Invoke-WebRequest `
+            -Uri "https://github.com/premake/premake-core/releases/download/v5.0.0-beta8/premake-5.0.0-beta8-windows.zip" `
+            -OutFile "vendor\premake\premake5.zip"
+          Expand-Archive -Path "vendor\premake\premake5.zip" -DestinationPath "vendor\premake\windows" -Force
+
+      # ---------------------------------------------------------------
+      # Build
+      # ---------------------------------------------------------------
+      - name: Set Qt/Curl paths
+        id: paths
+        shell: pwsh
+        run: |
+          $qtDir = "${{ github.workspace }}\deps\qt\${{ env.QT_VERSION }}\msvc2022_64"
+          $curlDir = "${{ github.workspace }}\deps\curl-install"
+          echo "QT_DIR=$qtDir" >> $env:GITHUB_ENV
+          echo "CURL_DIR=$curlDir" >> $env:GITHUB_ENV
+
+      - name: Run MOC + RCC (before Premake so generated/*.cpp exists for glob)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path generated | Out-Null
+          Get-ChildItem -Path src -Recurse -Filter "*.h" | ForEach-Object {
+            if (Select-String -Path $_.FullName -Pattern "Q_OBJECT" -Quiet) {
+              $out = "generated\moc_$($_.BaseName).cpp"
+              & "$env:QT_DIR\bin\moc.exe" $_.FullName -o $out
+              Write-Host "  MOC: $($_.Name) -> $out"
+            }
+          }
+          & "$env:QT_DIR\bin\rcc.exe" resources\resources.qrc -o generated\qrc_resources.cpp
+          Write-Host "  RCC: resources.qrc -> generated\qrc_resources.cpp"
+
+      - name: Generate project (Premake)
+        run: vendor\premake\windows\premake5.exe vs2022
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build ${{ matrix.config }}
+        run: msbuild build\CheckDown.sln /p:Configuration=${{ matrix.config }} /m
+
+      - name: Verify build output
+        run: |
+          if (!(Test-Path "bin\${{ matrix.config }}\CheckDown.exe")) {
+            Write-Error "Build output not found!"
+            exit 1
+          }
+          Write-Host "Build successful: bin\${{ matrix.config }}\CheckDown.exe"
+          Get-ChildItem "bin\${{ matrix.config }}" | Format-Table Name, Length
+
+      # ---------------------------------------------------------------
+      # Package
+      # ---------------------------------------------------------------
+      - name: Copy styles plugin
+        if: matrix.config == 'Release'
+        run: |
+          New-Item -ItemType Directory -Force -Path "bin\Release\styles"
+          $styleDll = "deps\qt\${{ env.QT_VERSION }}\msvc2022_64\plugins\styles\qmodernwindowsstyle.dll"
+          if (Test-Path $styleDll) {
+            Copy-Item $styleDll "bin\Release\styles\"
+          }
+
+      - name: Copy VC Runtime
+        if: matrix.config == 'Release'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "installer\vcredist"
+          $vcDir = (Get-ChildItem "C:\Program Files\Microsoft Visual Studio\*\*\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if ($vcDir) {
+            Copy-Item "$vcDir\vcruntime140.dll" "installer\vcredist\"
+            Copy-Item "$vcDir\vcruntime140_1.dll" "installer\vcredist\"
+            Copy-Item "$vcDir\msvcp140.dll" "installer\vcredist\"
+            Write-Host "VC Runtime copied from $vcDir"
+          } else {
+            Write-Warning "VC Runtime not found, installer will skip VC DLLs"
+          }
+
+      - name: Download yt-dlp
+        if: matrix.config == 'Release'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "vendor\yt-dlp"
+          Invoke-WebRequest `
+            -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" `
+            -OutFile "vendor\yt-dlp\yt-dlp.exe"
+          Write-Host "yt-dlp downloaded: $((Get-Item 'vendor\yt-dlp\yt-dlp.exe').Length) bytes"
+
+      - name: Build NSIS Installer
+        if: matrix.config == 'Release'
+        shell: cmd
+        run: |
+          choco install nsis -y --no-progress
+          cd installer
+          "%ProgramFiles(x86)%\NSIS\makensis.exe" checkdown.nsi
+
+      - name: Upload build artifacts
+        if: matrix.config == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CheckDown-Release
+          path: |
+            bin/Release/CheckDown.exe
+            bin/Release/*.dll
+            bin/Release/platforms/
+            bin/Release/styles/
+
+      - name: Upload installer
+        if: matrix.config == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CheckDown-Setup
+          path: installer/CheckDown-Setup.exe
+
+      - name: Upload Chrome extension
+        if: matrix.config == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CheckDown-ChromeExtension
+          path: extension/
+
+      # ---------------------------------------------------------------
+      # Release (on version tag only)
+      # ---------------------------------------------------------------
+      - name: Create GitHub Release
+        if: matrix.config == 'Release' && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            installer/CheckDown-Setup.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

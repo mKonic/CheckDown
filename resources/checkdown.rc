@@ -1,0 +1,5 @@
+// Windows resource file — embeds the application icon into the PE binary.
+// ID 1 (MAKEINTRESOURCE(1)) is the icon Windows Explorer and the taskbar use.
+#include <windows.h>
+
+1 ICON "checkdown.ico"
