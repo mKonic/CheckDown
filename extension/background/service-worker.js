@@ -169,7 +169,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.contextMenus.onClicked.addListener((info) => {
   if (info.menuItemId === "checkdown-download-link") {
     const url = info.linkUrl || info.srcUrl;
-    if (url) sendToCheckDown(url);
+    if (url && !url.startsWith("blob:") && !url.startsWith("data:"))
+      sendToCheckDown(url);
   }
 });
 
@@ -177,14 +178,19 @@ chrome.contextMenus.onClicked.addListener((info) => {
 // Download Interception
 // ---------------------------------------------------------------------------
 chrome.downloads.onDeterminingFilename.addListener((downloadItem, suggest) => {
+  // Never intercept blob: or data: URLs — they can't be re-downloaded by CheckDown
+  const url = downloadItem.url || "";
+  if (url.startsWith("blob:") || url.startsWith("data:")) { suggest(); return; }
+
   chrome.storage.sync.get(
     { autoIntercept: true, minInterceptSize: 1024 * 1024 },
     (settings) => {
       if (!settings.autoIntercept) { suggest(); return; }
 
       const fileName = downloadItem.filename || "";
-      const ext    = fileName.split(".").pop().toLowerCase();
-      const byExt  = INTERCEPT_EXTENSIONS.has(ext);
+      const dotIdx = fileName.lastIndexOf(".");
+      const ext    = dotIdx > 0 ? fileName.slice(dotIdx + 1).toLowerCase() : "";
+      const byExt  = ext !== "" && INTERCEPT_EXTENSIONS.has(ext);
       const bySize = (downloadItem.fileSize || 0) >= settings.minInterceptSize;
 
       if (byExt || bySize) {

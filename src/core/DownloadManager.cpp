@@ -242,11 +242,13 @@ void DownloadManager::removeDownload(int taskId) {
         if (task) {
             if (task->info().state == DownloadState::Downloading)
                 task->cancel();
-            std::lock_guard lk(m_mutex);
-            std::erase_if(m_tasks, [taskId](const auto& t) {
-                return t->info().id == taskId;
-            });
-            scheduleNext();
+            {
+                std::lock_guard lk(m_mutex);
+                std::erase_if(m_tasks, [taskId](const auto& t) {
+                    return t->info().id == taskId;
+                });
+            }
+            scheduleNext();   // called outside the lock to avoid recursive deadlock
             saveState();
             return;
         }
@@ -257,10 +259,12 @@ void DownloadManager::removeDownload(int taskId) {
         if (task) {
             if (task->info().state == DownloadState::Downloading)
                 task->cancel();
-            std::lock_guard lk(m_mutex);
-            std::erase_if(m_ytdlpTasks, [taskId](const auto& t) {
-                return t->info().id == taskId;
-            });
+            {
+                std::lock_guard lk(m_mutex);
+                std::erase_if(m_ytdlpTasks, [taskId](const auto& t) {
+                    return t->info().id == taskId;
+                });
+            }
         }
     }
 }

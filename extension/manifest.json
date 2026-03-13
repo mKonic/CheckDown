@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "CheckDown - Download Manager",
   "description": "Intercept downloads automatically and send videos from YouTube, TikTok, and Instagram to CheckDown via yt-dlp.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0XevPJFA6MwMuineFs2PthL7/pi3usfFb3z+SIAbLY/VuG+5qxb1Q1LMDlOFQlV8bSUSPXg9wK/P9w9RFBY9bV/9BCC+t3euh84GmmsU9ac92z0W+PKdvceMuesyNBULij4w7oVoIHCk3GK6eT2MV6BEGxeWt6MIUjt9WhCty4SQm5y4uDTsf3UfjKXBV7yUNWeVYybVH86psFMaj0jGZ6dIrLXD7Md+XNnPmS0wu24JOL335BuB5dsE9p3oRO9TBBkPQiUv7v5l8/7jOWcuQyY427/f3wlF4HE13ZxJIQDMHUes9kHFdz1g3TVQ00pxNEPqQm+YAtiTYTPvDmvxAwIDAQAB",
   "permissions": [
     "downloads",

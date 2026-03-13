@@ -9,6 +9,7 @@ deps/
 vendor/json/
 vendor/premake/
 vendor/yt-dlp/
+installer/
 
 # IDE / Editor
 .vs/

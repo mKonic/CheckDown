@@ -4,12 +4,13 @@
 Usage:
   python scripts/build.py              # Release build
   python scripts/build.py --installer  # Release build + NSIS installer
-  python scripts/build.py --all        # Same as --installer
+  python scripts/build.py --all        # Release build + NSIS installer + extension zip
 """
 
 import os
 import sys
 import glob
+import zipfile
 import subprocess
 from pathlib import Path
 
@@ -103,10 +104,30 @@ def step_installer():
     print(f"\n  Output: {ROOT / 'installer/CheckDown-Setup.exe'}")
 
 
+def step_pack_extension():
+    print("\n[+] Packing Chrome extension...")
+    ext_dir = ROOT / "extension"
+    if not ext_dir.exists():
+        print(f"ERROR: extension directory not found at {ext_dir}")
+        sys.exit(1)
+
+    out_zip = ROOT / "installer/CheckDown-Extension.zip"
+    out_zip.parent.mkdir(parents=True, exist_ok=True)
+
+    with zipfile.ZipFile(out_zip, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file in sorted(ext_dir.rglob("*")):
+            if file.is_file():
+                zf.write(file, file.relative_to(ext_dir))
+
+    size_kb = out_zip.stat().st_size // 1024
+    print(f"\n  Output: {out_zip}  ({size_kb} KB)")
+
+
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    do_installer = "--installer" in sys.argv or "--all" in sys.argv
+    do_installer  = "--installer" in sys.argv or "--all" in sys.argv
+    do_extension  = "--all" in sys.argv
 
     print("=== CheckDown Build ===")
     step_moc()
@@ -116,5 +137,8 @@ if __name__ == "__main__":
 
     if do_installer:
         step_installer()
+
+    if do_extension:
+        step_pack_extension()
 
     print("\n=== Done ===")

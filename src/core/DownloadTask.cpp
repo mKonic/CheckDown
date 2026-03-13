@@ -385,23 +385,27 @@ void DownloadTask::mergeSegments() {
     }
 
     std::vector<char> buf(kMergeBufferSize);
+    auto failMerge = [&](std::string msg) {
+        m_info.state = DownloadState::Failed;
+        m_info.errorMessage = std::move(msg);
+        LOG_ERROR("Task {}: {}", m_info.id, m_info.errorMessage);
+        out.close();
+        // Remove the partial output file so it doesn't confuse the user
+        std::error_code ec;
+        std::filesystem::remove(m_info.savePath, ec);
+    };
 
     for (auto& si : m_info.segments) {
         std::ifstream in(si.tempFilePath, std::ios::binary);
         if (!in.is_open()) {
-            m_info.state = DownloadState::Failed;
-            m_info.errorMessage = std::format("Missing segment file: {}", si.tempFilePath);
-            LOG_ERROR("Task {}: {}", m_info.id, m_info.errorMessage);
+            failMerge(std::format("Missing segment file: {}", si.tempFilePath));
             return;
         }
 
         while (in.read(buf.data(), static_cast<std::streamsize>(buf.size())) || in.gcount() > 0) {
             out.write(buf.data(), in.gcount());
             if (!out.good()) {
-                m_info.state = DownloadState::Failed;
-                m_info.errorMessage = std::format("Write error merging into '{}'",
-                                                   m_info.savePath.string());
-                LOG_ERROR("Task {}: {}", m_info.id, m_info.errorMessage);
+                failMerge(std::format("Write error merging into '{}'", m_info.savePath.string()));
                 return;
             }
         }

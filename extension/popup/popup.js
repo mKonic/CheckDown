@@ -22,6 +22,10 @@ function getYtdlpPlatform(url) {
     if (h.includes("youtube.com") || h.includes("youtu.be")) return "youtube";
     if (h.includes("instagram.com"))                          return "instagram";
     if (h.includes("tiktok.com"))                            return "tiktok";
+    if (h.includes("twitter.com") || h.includes("x.com"))   return "twitter";
+    if (h.includes("reddit.com"))                            return "reddit";
+    if (h.includes("vimeo.com"))                             return "vimeo";
+    if (h.includes("twitch.tv"))                             return "twitch";
   } catch {}
   return null;
 }
@@ -178,8 +182,8 @@ function renderVideoTab() {
 
   mediaEmpty.style.display = "none";
 
-  const icons = { youtube: "▶", instagram: "📷", tiktok: "♪" };
-  const names = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
+  const icons = { youtube: "▶", instagram: "📷", tiktok: "♪", twitter: "𝕏", reddit: "🔴", vimeo: "▶", twitch: "🟣" };
+  const names = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", twitter: "Twitter / X", reddit: "Reddit", vimeo: "Vimeo", twitch: "Twitch" };
 
   const card = document.createElement("div");
   card.className = "platform-card";
