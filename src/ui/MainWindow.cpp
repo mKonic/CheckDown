@@ -900,7 +900,7 @@ void MainWindow::applyStylesheet() {
             background: #45475a;
         }
         QSpinBox::up-arrow {
-            image: url(:/arrow-down.png);
+            image: url(:/arrow-up.png);
             width: 10px;
             height: 8px;
         }
@@ -916,7 +916,7 @@ void MainWindow::applyStylesheet() {
             background: #45475a;
         }
         QSpinBox::down-arrow {
-            image: url(:/arrow-up.png);
+            image: url(:/arrow-down.png);
             width: 10px;
             height: 8px;
         }

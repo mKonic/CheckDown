@@ -5,13 +5,16 @@ Usage:
   python scripts/build.py              # Release build
   python scripts/build.py --installer  # Release build + NSIS installer
   python scripts/build.py --all        # Release build + NSIS installer + extension zip
+  python scripts/build.py --update-ytdlp  # Update yt-dlp to latest before building
 """
 
 import os
 import sys
 import glob
+import json
 import zipfile
 import subprocess
+import urllib.request
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -104,6 +107,53 @@ def step_installer():
     print(f"\n  Output: {ROOT / 'installer/CheckDown-Setup.exe'}")
 
 
+def step_update_ytdlp():
+    """Download latest yt-dlp.exe if newer than the bundled copy."""
+    print("\n[+] Checking yt-dlp for updates...")
+    ytdlp_dir = ROOT / "vendor/yt-dlp"
+    ytdlp_exe = ytdlp_dir / "yt-dlp.exe"
+
+    # Get latest release tag from GitHub API
+    try:
+        req = urllib.request.Request(
+            "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest",
+            headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "CheckDown-Build"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            release = json.loads(resp.read())
+        latest_tag = release["tag_name"]
+    except Exception as e:
+        print(f"  Could not check latest version: {e}")
+        return
+
+    # Check current version (if exists)
+    current_tag = None
+    if ytdlp_exe.exists():
+        try:
+            r = subprocess.run(
+                [str(ytdlp_exe), "--version"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if r.returncode == 0:
+                current_tag = r.stdout.strip()
+        except Exception:
+            pass
+
+    if current_tag and current_tag == latest_tag:
+        print(f"  yt-dlp is up to date ({current_tag})")
+        return
+
+    print(f"  Updating yt-dlp: {current_tag or '(not found)'} -> {latest_tag}")
+    ytdlp_dir.mkdir(parents=True, exist_ok=True)
+    url = f"https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+    try:
+        urllib.request.urlretrieve(url, str(ytdlp_exe))
+        size_mb = ytdlp_exe.stat().st_size / (1024 * 1024)
+        print(f"  Downloaded yt-dlp {latest_tag} ({size_mb:.1f} MB)")
+    except Exception as e:
+        print(f"  WARNING: Failed to download yt-dlp: {e}")
+
+
 def step_pack_extension():
     print("\n[+] Packing Chrome extension...")
     ext_dir = ROOT / "extension"
@@ -128,8 +178,13 @@ def step_pack_extension():
 if __name__ == "__main__":
     do_installer  = "--installer" in sys.argv or "--all" in sys.argv
     do_extension  = "--all" in sys.argv
+    do_ytdlp     = "--update-ytdlp" in sys.argv or "--all" in sys.argv
 
     print("=== CheckDown Build ===")
+
+    if do_ytdlp:
+        step_update_ytdlp()
+
     step_moc()
     step_rcc()
     step_premake()
