@@ -20,10 +20,7 @@ void Logger::init(const std::filesystem::path& logPath, LogLevel minLevel) {
     std::filesystem::create_directories(m_path.parent_path(), ec);
 
     m_file.open(m_path, std::ios::app);
-    if (m_file.is_open()) {
-        m_file << "\n[=== CheckDown session started ===]\n";
-        m_file.flush();
-    }
+    m_file.flush();
 }
 
 std::filesystem::path Logger::logPath() const {

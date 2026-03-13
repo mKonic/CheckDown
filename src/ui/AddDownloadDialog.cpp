@@ -81,8 +81,13 @@ AddDownloadDialog::AddDownloadDialog(QWidget* parent)
         m_fileNameEdited = true;
     });
 
-    // Auto-paste URL from clipboard if it looks like a URL
+    // Auto-paste URL from clipboard if it looks like a URL.
+    // Also strip "URL: " labels users sometimes accidentally copy (e.g. "URL: https://...").
     QString clip = QApplication::clipboard()->text().trimmed();
+    if (clip.startsWith("URL: ", Qt::CaseInsensitive))
+        clip = clip.mid(5).trimmed();
+    else if (clip.startsWith("URL:", Qt::CaseInsensitive))
+        clip = clip.mid(4).trimmed();
     if (!clip.isEmpty()) {
         QUrl parsed(clip);
         if (parsed.isValid() &&
@@ -94,7 +99,12 @@ AddDownloadDialog::AddDownloadDialog(QWidget* parent)
 }
 
 std::string AddDownloadDialog::url() const {
-    return m_urlEdit->text().trimmed().toStdString();
+    QString text = m_urlEdit->text().trimmed();
+    if (text.startsWith("URL: ", Qt::CaseInsensitive))
+        text = text.mid(5).trimmed();
+    else if (text.startsWith("URL:", Qt::CaseInsensitive))
+        text = text.mid(4).trimmed();
+    return text.toStdString();
 }
 
 std::filesystem::path AddDownloadDialog::savePath() const {
@@ -142,8 +152,15 @@ void AddDownloadDialog::onUrlChanged() {
 }
 
 void AddDownloadDialog::onAccept() {
-    if (m_urlEdit->text().trimmed().isEmpty()) {
+    auto urlText = url(); // uses sanitized url()
+    if (urlText.empty()) {
         QMessageBox::warning(this, "Error", "Please enter a URL.");
+        return;
+    }
+    QUrl qurl(QString::fromStdString(urlText));
+    if (qurl.scheme() != "http" && qurl.scheme() != "https") {
+        QMessageBox::warning(this, "Invalid URL",
+            "Please enter a valid http:// or https:// URL.");
         return;
     }
     auto dirText = m_savePathEdit->text().trimmed();

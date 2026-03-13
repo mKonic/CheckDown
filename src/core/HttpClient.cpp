@@ -103,8 +103,9 @@ HttpClient& HttpClient::operator=(HttpClient&&) noexcept = default;
 // HEAD
 // ---------------------------------------------------------------------------
 struct HeaderCtx {
-    bool        acceptsRanges = false;
+    bool        acceptsRanges     = false;
     std::string contentDisposition;
+    int64_t     contentRangeTotal = -1; // parsed from Content-Range: bytes X-Y/TOTAL
 };
 
 static size_t headHeaderCb(char* buffer, size_t size, size_t nitems, void* userdata) {
@@ -129,6 +130,14 @@ static size_t headHeaderCb(char* buffer, size_t size, size_t nitems, void* userd
         while (!ctx->contentDisposition.empty() &&
                (ctx->contentDisposition.back() == '\r' || ctx->contentDisposition.back() == '\n'))
             ctx->contentDisposition.pop_back();
+    }
+    if (lower.starts_with("content-range:")) {
+        // Content-Range: bytes 0-0/1073741824
+        auto slash = line.rfind('/');
+        if (slash != std::string::npos) {
+            try { ctx->contentRangeTotal = std::stoll(line.substr(slash + 1)); }
+            catch (...) {}
+        }
     }
     return size * nitems;
 }
@@ -170,49 +179,107 @@ std::expected<HeadResult, HttpError> HttpClient::head(const std::string& url) {
     if (!m_impl->curl)
         return std::unexpected(HttpError{0, "CURL handle is null"});
 
-    m_impl->reset();
-    m_impl->setCommonOpts(url);
-    curl_easy_setopt(m_impl->curl, CURLOPT_NOBODY, 1L);
-    curl_easy_setopt(m_impl->curl, CURLOPT_TIMEOUT, 30L); // overall HEAD timeout
+    // --- attempt HEAD with a given HTTP version ---
+    auto doHead = [&](long httpVer) -> std::expected<HeadResult, HttpError> {
+        m_impl->reset();
+        m_impl->setCommonOpts(url);
+        curl_easy_setopt(m_impl->curl, CURLOPT_HTTP_VERSION, httpVer);
+        curl_easy_setopt(m_impl->curl, CURLOPT_NOBODY, 1L);
+        curl_easy_setopt(m_impl->curl, CURLOPT_TIMEOUT, 30L);
 
-    HeaderCtx hctx;
-    curl_easy_setopt(m_impl->curl, CURLOPT_HEADERFUNCTION, headHeaderCb);
-    curl_easy_setopt(m_impl->curl, CURLOPT_HEADERDATA, &hctx);
+        HeaderCtx hctx;
+        curl_easy_setopt(m_impl->curl, CURLOPT_HEADERFUNCTION, headHeaderCb);
+        curl_easy_setopt(m_impl->curl, CURLOPT_HEADERDATA, &hctx);
 
-    CURLcode res = curl_easy_perform(m_impl->curl);
-    if (res != CURLE_OK) {
-        auto msg = std::format("HEAD failed (curl {}): {}", static_cast<int>(res),
-                               curl_easy_strerror(res));
-        LOG_ERROR("{} — URL: {}", msg, url);
-        return std::unexpected(HttpError{static_cast<int>(res), msg});
+        CURLcode res = curl_easy_perform(m_impl->curl);
+        if (res != CURLE_OK)
+            return std::unexpected(HttpError{static_cast<int>(res),
+                std::format("HEAD failed (curl {}): {}", static_cast<int>(res),
+                            curl_easy_strerror(res))});
+
+        long httpCode = 0;
+        curl_easy_getinfo(m_impl->curl, CURLINFO_RESPONSE_CODE, &httpCode);
+        char* effUrl = nullptr;
+        curl_easy_getinfo(m_impl->curl, CURLINFO_EFFECTIVE_URL, &effUrl);
+        std::string effectiveUrl = effUrl ? effUrl : url;
+
+        if (httpCode >= 400)
+            return std::unexpected(HttpError{static_cast<int>(httpCode),
+                std::format("HTTP {} from HEAD", httpCode)});
+
+        HeadResult result;
+        curl_off_t cl = -1;
+        curl_easy_getinfo(m_impl->curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &cl);
+        result.contentLength = static_cast<int64_t>(cl);
+        result.acceptsRanges = hctx.acceptsRanges;
+        result.effectiveUrl  = effectiveUrl;
+        if (!hctx.contentDisposition.empty())
+            result.fileName = extractFileNameFromDisposition(hctx.contentDisposition);
+        return result;
+    };
+
+    // --- fallback: GET Range: bytes=0-0 (for servers that reject HEAD) ---
+    auto doGetRange = [&]() -> std::expected<HeadResult, HttpError> {
+        LOG_WARN("HEAD not supported — falling back to GET Range: bytes=0-0");
+        m_impl->reset();
+        m_impl->setCommonOpts(url);
+        curl_easy_setopt(m_impl->curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+        curl_easy_setopt(m_impl->curl, CURLOPT_RANGE, "0-0");
+        curl_easy_setopt(m_impl->curl, CURLOPT_TIMEOUT, 30L);
+
+        HeaderCtx hctx;
+        curl_easy_setopt(m_impl->curl, CURLOPT_HEADERFUNCTION, headHeaderCb);
+        curl_easy_setopt(m_impl->curl, CURLOPT_HEADERDATA, &hctx);
+        // Discard body
+        curl_easy_setopt(m_impl->curl, CURLOPT_WRITEFUNCTION,
+            +[](char*, size_t sz, size_t n, void*) -> size_t { return sz * n; });
+
+        CURLcode res = curl_easy_perform(m_impl->curl);
+        if (res != CURLE_OK)
+            return std::unexpected(HttpError{static_cast<int>(res),
+                std::format("GET-Range fallback failed (curl {}): {}", static_cast<int>(res),
+                            curl_easy_strerror(res))});
+
+        long httpCode = 0;
+        curl_easy_getinfo(m_impl->curl, CURLINFO_RESPONSE_CODE, &httpCode);
+        char* effUrl = nullptr;
+        curl_easy_getinfo(m_impl->curl, CURLINFO_EFFECTIVE_URL, &effUrl);
+        std::string effectiveUrl = effUrl ? effUrl : url;
+
+        if (httpCode >= 400)
+            return std::unexpected(HttpError{static_cast<int>(httpCode),
+                std::format("HTTP {} from GET-Range fallback", httpCode)});
+
+        HeadResult result;
+        // Content-Length from a 206 is the range size (1 byte), not the file size.
+        // The real total comes from Content-Range: bytes 0-0/TOTAL.
+        result.contentLength = hctx.contentRangeTotal; // -1 if server didn't advertise it
+        result.acceptsRanges = hctx.acceptsRanges || (httpCode == 206);
+        result.effectiveUrl  = effectiveUrl;
+        if (!hctx.contentDisposition.empty())
+            result.fileName = extractFileNameFromDisposition(hctx.contentDisposition);
+        return result;
+    };
+
+    // 1. Try HEAD (HTTP/2 over TLS, falls back to HTTP/1.1 at TLS level automatically)
+    auto result = doHead(CURL_HTTP_VERSION_2TLS);
+
+    // 2. If HEAD fails with a connection/recv error (curl 56, 52) or 405, go straight to
+    //    GET Range: bytes=0-0 — retrying HEAD with HTTP/1.1 hits the same wall on servers
+    //    that don't support HEAD at all.
+    if (!result) {
+        int ec = result.error().curlCode;
+        if (ec == CURLE_RECV_ERROR /*56*/ || ec == CURLE_GOT_NOTHING /*52*/ || ec == 405)
+            result = doGetRange();
     }
 
-    long httpCode = 0;
-    curl_easy_getinfo(m_impl->curl, CURLINFO_RESPONSE_CODE, &httpCode);
-
-    char* effUrl = nullptr;
-    curl_easy_getinfo(m_impl->curl, CURLINFO_EFFECTIVE_URL, &effUrl);
-    std::string effectiveUrl = effUrl ? effUrl : url;
-
-    if (httpCode >= 400) {
-        auto msg = std::format("HTTP {} from HEAD", httpCode);
-        LOG_ERROR("{} — effective URL: {}", msg, effectiveUrl);
-        return std::unexpected(HttpError{static_cast<int>(httpCode), msg});
+    if (!result) {
+        LOG_ERROR("{} — URL: {}", result.error().message, url);
+        return result;
     }
 
-    HeadResult result;
-    curl_off_t cl = -1;
-    curl_easy_getinfo(m_impl->curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &cl);
-    result.contentLength = static_cast<int64_t>(cl);
-    result.acceptsRanges = hctx.acceptsRanges;
-    result.effectiveUrl  = effectiveUrl;
-
-    if (!hctx.contentDisposition.empty())
-        result.fileName = extractFileNameFromDisposition(hctx.contentDisposition);
-
-    LOG_INFO("HEAD OK: status={} size={} ranges={} effectiveUrl={}",
-             httpCode, result.contentLength, result.acceptsRanges, effectiveUrl);
-
+    LOG_INFO("HEAD OK: size={} ranges={} effectiveUrl={}",
+             result->contentLength, result->acceptsRanges, result->effectiveUrl);
     return result;
 }
 

@@ -31,6 +31,8 @@
 #include <QStackedWidget>
 #include <QVBoxLayout>
 #include <filesystem>
+#include <chrono>
+#include <ctime>
 
 namespace checkdown {
 
@@ -45,8 +47,17 @@ MainWindow::MainWindow(QWidget* parent)
     auto configDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     std::filesystem::path stateDir = configDir.toStdString();
 
-    // Init logger before anything else so all operations are captured
-    Logger::instance().init(stateDir / "checkdown.log");
+    // Init logger before anything else so all operations are captured.
+    // Each session gets its own timestamped file under logs/.
+    {
+        auto now = std::chrono::system_clock::now();
+        auto t   = std::chrono::system_clock::to_time_t(now);
+        struct tm tmBuf{};
+        localtime_s(&tmBuf, &t);
+        char nameBuf[24];
+        std::strftime(nameBuf, sizeof(nameBuf), "%Y-%m-%d_%H-%M-%S", &tmBuf);
+        Logger::instance().init(stateDir / "logs" / (std::string(nameBuf) + ".log"));
+    }
     LOG_INFO("=== MainWindow initialising ===");
 
     // Load settings early so m_defaultSegments and maxConcurrent are ready
