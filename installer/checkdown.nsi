@@ -15,11 +15,11 @@ RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 
 ; Version info
-VIProductVersion "1.0.0.0"
+VIProductVersion "1.0.1.0"
 VIAddVersionKey "ProductName" "CheckDown"
-VIAddVersionKey "ProductVersion" "1.0.0"
+VIAddVersionKey "ProductVersion" "1.0.1"
 VIAddVersionKey "FileDescription" "CheckDown Download Manager Installer"
-VIAddVersionKey "FileVersion" "1.0.0.0"
+VIAddVersionKey "FileVersion" "1.0.1.0"
 VIAddVersionKey "LegalCopyright" "Copyright (c) 2026"
 
 ; ---------------------------------------------------------------------------
@@ -123,7 +123,7 @@ Section "CheckDown (required)" SecCore
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CheckDown" \
         "Publisher" "CheckDown"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CheckDown" \
-        "DisplayVersion" "1.0.0"
+        "DisplayVersion" "1.0.1"
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CheckDown" \
         "NoModify" 1
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CheckDown" \

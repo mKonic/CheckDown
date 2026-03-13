@@ -381,6 +381,11 @@ void DownloadTask::mergeSegments() {
         m_info.errorMessage = std::format("Cannot create output file: {}",
                                            m_info.savePath.string());
         LOG_ERROR("Task {}: {}", m_info.id, m_info.errorMessage);
+        // Clean up segment temp files so they don't accumulate on disk
+        for (auto& si : m_info.segments) {
+            std::error_code ec;
+            std::filesystem::remove(si.tempFilePath, ec);
+        }
         return;
     }
 
@@ -439,11 +444,11 @@ void DownloadTask::emitProgress() {
             total += si.downloadedBytes;
         tp.downloadedBytes = total;
 
-        // Speed calculation
+        // Speed calculation (clamp delta to 0 to avoid negative speed after pause/resume)
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration<double>(now - m_lastSpeedTime).count();
         if (elapsed >= 0.25) {
-            int64_t delta    = total - m_lastSpeedBytes;
+            int64_t delta    = std::max(int64_t(0), total - m_lastSpeedBytes);
             m_currentSpeed   = (elapsed > 1e-9) ? (static_cast<double>(delta) / elapsed) : 0.0;
             m_lastSpeedTime  = now;
             m_lastSpeedBytes = total;

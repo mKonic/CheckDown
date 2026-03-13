@@ -265,6 +265,8 @@ void DownloadManager::removeDownload(int taskId) {
                     return t->info().id == taskId;
                 });
             }
+            scheduleNext();
+            scheduleNextYtdlp();
         }
     }
 }
@@ -331,6 +333,10 @@ void DownloadManager::saveState() {
         out.close();
         std::error_code ec;
         std::filesystem::rename(tempPath, statePath, ec);
+        if (ec) {
+            LOG_WARN("saveState: rename failed — {}", ec.message());
+            std::filesystem::remove(tempPath, ec);
+        }
     }
 }
 
