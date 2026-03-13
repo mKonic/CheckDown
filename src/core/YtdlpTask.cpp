@@ -145,6 +145,14 @@ DownloadInfo YtdlpTask::info() const {
 
 void YtdlpTask::onReadyReadStdout() {
     m_lineBuf += QString::fromUtf8(m_process->readAllStandardOutput());
+
+    // Safety cap: discard if yt-dlp sends a huge line without newlines
+    if (m_lineBuf.size() > 256 * 1024) {
+        LOG_WARN("YtdlpTask {}: line buffer exceeded 256 KB, discarding", m_info.id);
+        m_lineBuf.clear();
+        return;
+    }
+
     int nl;
     while ((nl = m_lineBuf.indexOf('\n')) != -1) {
         QString line = m_lineBuf.left(nl).trimmed();

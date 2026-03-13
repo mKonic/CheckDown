@@ -348,8 +348,12 @@ void DownloadManager::loadState() {
     json root;
     try {
         in >> root;
+    } catch (const std::exception& e) {
+        LOG_WARN("loadState: corrupt state file — {}", e.what());
+        return;
     } catch (...) {
-        return; // corrupt file, ignore
+        LOG_WARN("loadState: corrupt state file — unknown error");
+        return;
     }
 
     std::lock_guard lk(m_mutex);
@@ -447,6 +451,7 @@ void DownloadManager::onTaskProgress(const TaskProgress& progress) {
         progress.state == DownloadState::Failed ||
         progress.state == DownloadState::Cancelled) {
         scheduleNext();
+        saveState();
     }
 }
 

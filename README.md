@@ -4,16 +4,14 @@ A fast, multi-segment download manager for Windows with a Chrome/Edge extension 
 
 ## Features
 
-- **Multi-segment downloading** — splits files into parallel segments for faster speeds
-- **Browser extension** — intercepts downloads automatically; detects embedded media (video/audio) on pages including YouTube, TikTok, and Instagram
-- **Download organization** — automatically sorts files into subfolders (Videos, Audio, Images, Documents, Archives, Programs)
-- **Resume support** — paused or interrupted downloads pick up where they left off
-- **System tray** — runs quietly in the background; show/hide with a click
-- **Native Messaging** — extension communicates with the app via Chrome's secure native messaging API, no open ports
-
-## Screenshots
-
-> Coming soon.
+- Multi-segment parallel downloading
+- Pause, resume, and cancel downloads
+- Automatic file categorization (Videos, Audio, Images, Documents, Archives, Programs)
+- Browser extension with automatic download interception
+- yt-dlp integration (YouTube, TikTok, Instagram)
+- Cookie forwarding for authenticated downloads
+- Drag & drop and clipboard paste (Ctrl+V)
+- Dark theme (Catppuccin Mocha)
 
 ## Installation
 
@@ -22,10 +20,8 @@ A fast, multi-segment download manager for Windows with a Chrome/Edge extension 
 3. Load the Chrome extension:
    - Open `chrome://extensions`
    - Enable **Developer mode**
-   - Click **Load unpacked** → select the `extension/` folder inside the installation directory
+   - Click **Load unpacked** → select the `extension/` folder inside the install directory
 4. Launch CheckDown — the extension status dot will turn green
-
-> The extension ID will be `bilkcagfjmdbanpopmgpeomknejeiand` regardless of where you load it from (the manifest includes a stable key).
 
 ## Building from Source
 
@@ -39,73 +35,32 @@ A fast, multi-segment download manager for Windows with a Chrome/Edge extension 
 | Premake5 | 5.0.0-beta8+ | in PATH |
 | NSIS | 3.x | for installer only |
 
-Set environment variables or edit `premake5.lua`:
-```
-QT_DIR   = C:/path/to/qt/6.8.3/msvc2022_64
-CURL_DIR = C:/path/to/curl-install
-```
-
 ### Build
 
-```bat
-premake5 vs2026
-scripts\do_build.bat
+```bash
+python scripts/build.py --all
 ```
 
-### Build installer
+This runs MOC/RCC generation, Premake, MSBuild (Release), NSIS installer, and extension packaging in one step.
 
-```bat
-scripts\do_installer.bat
+To build individual steps:
+```bash
+python scripts/build.py          # compile only
+python scripts/build.py --installer  # compile + installer
 ```
 
-Output: `installer/CheckDown-Setup.exe`
+Output:
+- `bin/Release/CheckDown.exe`
+- `installer/CheckDown-Setup.exe`
+- `installer/CheckDown-Extension.zip`
 
-## Downloading from YouTube, TikTok, and Instagram
+## yt-dlp
 
-CheckDown bundles **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** (`vendor/yt-dlp/yt-dlp.exe`) to handle downloads from these platforms. When you're on a YouTube, TikTok, or Instagram page, the extension popup shows **↓ Download** (and **↓ Playlist** on YouTube playlist pages) buttons that send the page URL to CheckDown, which then invokes yt-dlp internally. Progress (percent, speed, ETA, filename) is streamed back to the download table in real time.
+CheckDown bundles [yt-dlp](https://github.com/yt-dlp/yt-dlp) for YouTube, TikTok, and Instagram downloads. The extension popup shows download buttons on supported pages. Progress is streamed back to the UI in real time.
 
-### Cookie support
+### Cookies
 
-Some content requires authentication (age-gated videos, private accounts). The extension popup's **Downloads** tab shows a **Send cookies for <site>** toggle for supported platforms. When enabled, the extension forwards the current session cookies for that site along with the download request so yt-dlp (or libcurl for regular downloads) can authenticate.
-
-
-## Architecture
-
-```
-CheckDown.exe (UI app)
-  ├── DownloadManager      task queue, concurrency, state persistence
-  ├── DownloadTask         per-download state machine (regular HTTP)
-  │   └── Segment (×N)    parallel byte-range workers via libcurl
-  ├── YtdlpTask            yt-dlp subprocess wrapper (YouTube/TikTok/Instagram)
-  ├── PipeServer           \\.\pipe\CheckDown — NMH bridge endpoint
-  └── MainWindow           Qt6 UI, tray icon
-
-CheckDown.exe (NMH bridge mode, spawned by Chrome)
-  └── stdin/stdout ↔ \\.\pipe\CheckDown relay
-
-Chrome Extension
-  ├── background/service-worker.js   sendNativeMessage, webRequest media detection
-  ├── content/interceptor.js         MAIN world — YT/TikTok/IG globals + fetch/XHR hooks
-  ├── content/content.js             isolated world — DOM scan, postMessage relay
-  └── popup/                         two-tab UI (Downloads + Media)
-```
-
-## Project Structure
-
-```
-src/
-  core/        DownloadManager, DownloadTask, YtdlpTask, Segment, HttpClient, Logger, Types, Version
-  server/      PipeServer (named pipe IPC)
-  ui/          MainWindow, AddDownloadDialog, SettingsDialog, DownloadTableModel, TrayManager
-extension/
-  background/  service-worker.js
-  content/     interceptor.js (MAIN world), content.js (isolated)
-  popup/       popup.html/js/css
-  icons/
-installer/     checkdown.nsi
-resources/     app icons (.png, .ico)
-scripts/       build helpers
-```
+Some content requires authentication (age-gated videos, private accounts). The extension popup has a **Send cookies** toggle for supported sites. When enabled, session cookies are forwarded with proper domain matching so yt-dlp or libcurl can authenticate.
 
 ## License
 

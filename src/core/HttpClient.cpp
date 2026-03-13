@@ -7,6 +7,8 @@
 #include <format>
 #include <mutex>
 #include <algorithm>
+#include <string_view>
+#include <vector>
 
 namespace checkdown {
 
@@ -29,8 +31,8 @@ void HttpClient::globalCleanup() {
 // PIMPL
 // ---------------------------------------------------------------------------
 struct HttpClient::Impl {
-    CURL*       curl      = nullptr;
-    std::string cookieStr;          // set via setCookies(), applied in setCommonOpts()
+    CURL*                    curl = nullptr;
+    std::vector<std::string> cookieLines;   // Netscape TSV format, set via setCookies()
 
     Impl() {
         curl = curl_easy_init();
@@ -48,12 +50,27 @@ struct HttpClient::Impl {
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 10L);
         curl_easy_setopt(curl, CURLOPT_USERAGENT, kUserAgent);
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
         // Use native Windows CA store
         curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
-        // Cookies (optional, set by setCookies())
-        if (!cookieStr.empty())
-            curl_easy_setopt(curl, CURLOPT_COOKIE, cookieStr.c_str());
+        // Prefer HTTP/2 over TLS (falls back to HTTP/1.1 if unsupported)
+        curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2TLS);
+        // Larger receive buffer: 256 KB (default is 16 KB) — fewer syscalls
+        curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 256L * 1024L);
+        // Disable Nagle's algorithm for faster small-packet delivery
+        curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1L);
+        // TCP keepalive to prevent idle connection drops
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 60L);
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 30L);
+        // Cookies: use CURLOPT_COOKIELIST (Netscape TSV format) so curl handles
+        // domain/path matching and doesn't send cookies to unrelated CDN hosts.
+        if (!cookieLines.empty()) {
+            // Enable the cookie engine
+            curl_easy_setopt(curl, CURLOPT_COOKIELIST, "");
+            for (auto& line : cookieLines)
+                curl_easy_setopt(curl, CURLOPT_COOKIELIST, line.c_str());
+        }
     }
 };
 
@@ -63,8 +80,20 @@ struct HttpClient::Impl {
 HttpClient::HttpClient()  : m_impl(std::make_unique<Impl>()) {}
 HttpClient::~HttpClient() = default;
 
-void HttpClient::setCookies(std::string cookies) {
-    m_impl->cookieStr = std::move(cookies);
+void HttpClient::setCookies(const std::string& cookies) {
+    m_impl->cookieLines.clear();
+    if (cookies.empty()) return;
+
+    // Split on newlines — each line is a Netscape TSV cookie entry
+    std::string_view sv(cookies);
+    while (!sv.empty()) {
+        auto nl = sv.find('\n');
+        auto line = sv.substr(0, nl);
+        if (!line.empty() && line.front() != '#')
+            m_impl->cookieLines.emplace_back(line);
+        if (nl == std::string_view::npos) break;
+        sv.remove_prefix(nl + 1);
+    }
 }
 
 HttpClient::HttpClient(HttpClient&&) noexcept            = default;

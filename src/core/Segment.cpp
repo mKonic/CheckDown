@@ -54,39 +54,71 @@ SegmentInfo Segment::info() const {
 }
 
 void Segment::run(std::stop_token stopToken) {
-    int64_t existingBytes = 0;
-    {
-        std::lock_guard lk(m_mutex);
-        existingBytes = m_info.downloadedBytes;
-    }
-    LOG_DEBUG("Segment {}: starting bytes={}-{} existing={}",
-              m_info.id, m_info.startByte, m_info.endByte, existingBytes);
+    static constexpr int kMaxRetries = 2;
 
-    auto result = m_http.downloadRange(
-        m_url,
-        m_info.startByte,
-        m_info.endByte,
-        m_info.tempFilePath,
-        existingBytes,
-        stopToken,
-        [this](int64_t downloaded, int64_t /*total*/) {
-            {
-                std::lock_guard lk(m_mutex);
-                m_info.downloadedBytes = downloaded;
-            }
+    auto doDownload = [&]() {
+        int64_t existingBytes = 0;
+        {
+            std::lock_guard lk(m_mutex);
+            existingBytes = m_info.downloadedBytes;
+        }
+        LOG_DEBUG("Segment {}: starting bytes={}-{} existing={}",
+                  m_info.id, m_info.startByte, m_info.endByte, existingBytes);
 
-            // Throttle progress callbacks to ~4 per second
-            auto now = std::chrono::steady_clock::now();
-            if (now - m_lastCallbackTime >= std::chrono::milliseconds(250)) {
-                m_lastCallbackTime = now;
-                if (m_callback) {
+        return m_http.downloadRange(
+            m_url,
+            m_info.startByte,
+            m_info.endByte,
+            m_info.tempFilePath,
+            existingBytes,
+            stopToken,
+            [this](int64_t downloaded, int64_t /*total*/) {
+                bool shouldCallback = false;
+                {
+                    std::lock_guard lk(m_mutex);
+                    m_info.downloadedBytes = downloaded;
+
+                    // Throttle progress callbacks to ~4 per second
+                    auto now = std::chrono::steady_clock::now();
+                    if (now - m_lastCallbackTime >= std::chrono::milliseconds(250)) {
+                        m_lastCallbackTime = now;
+                        shouldCallback = true;
+                    }
+                }
+
+                if (shouldCallback && m_callback) {
                     m_callback(SegmentProgress{
                         m_info.id, downloaded, SegmentState::Downloading, {}
                     });
                 }
             }
+        );
+    };
+
+    std::expected<void, HttpError> result;
+    for (int attempt = 0; attempt <= kMaxRetries; ++attempt) {
+        result = doDownload();
+
+        if (result.has_value())
+            break; // success
+
+        auto& err = result.error();
+        // Don't retry user-initiated pauses
+        if (err.curlCode == 42 /* CURLE_ABORTED_BY_CALLBACK */)
+            break;
+        // Don't retry HTTP 4xx errors (client errors, not transient)
+        if (err.curlCode >= 400 && err.curlCode < 500)
+            break;
+
+        if (attempt < kMaxRetries) {
+            LOG_WARN("Segment {}: attempt {} failed ({}), retrying...",
+                     m_info.id, attempt + 1, err.message);
+            // Brief delay before retry (1s, 2s)
+            std::this_thread::sleep_for(std::chrono::seconds(attempt + 1));
+            if (stopToken.stop_requested())
+                break;
         }
-    );
+    }
 
     std::lock_guard lk(m_mutex);
 

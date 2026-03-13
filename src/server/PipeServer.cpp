@@ -136,18 +136,30 @@ void PipeServer::handleMessage(QLocalSocket* sock, const QByteArray& json) {
         int64_t fileSize = static_cast<int64_t>(msg["fileSize"].toDouble(-1));
         int segments     = msg["segments"].toInt(8);
 
-        // Convert cookies JSON array → "name=val; name2=val2" (libcurl CURLOPT_COOKIE format)
+        // Convert cookies JSON array → Netscape TSV lines so curl can do
+        // proper domain/path matching (prevents sending cookies to CDN hosts).
         QString cookies;
         if (msg["cookies"].isArray()) {
-            QStringList parts;
+            QStringList lines;
             for (const auto& c : msg["cookies"].toArray()) {
-                auto co   = c.toObject();
-                auto name = co["name"].toString();
-                auto val  = co["value"].toString();
+                if (!c.isObject()) continue;
+                auto co         = c.toObject();
+                QString domain  = co["domain"].toString();
+                bool subdomains = domain.startsWith(".");
+                QString path    = co["path"].toString();
+                if (path.isEmpty()) path = "/";
+                QString secure  = co["secure"].toBool() ? "TRUE" : "FALSE";
+                QString expiry  = QString::number(static_cast<qint64>(co["expirationDate"].toDouble(0)));
+                QString name    = co["name"].toString();
+                QString value   = co["value"].toString();
                 if (!name.isEmpty())
-                    parts << name + "=" + val;
+                    lines << QString("%1\t%2\t%3\t%4\t%5\t%6\t%7")
+                                  .arg(domain)
+                                  .arg(subdomains ? "TRUE" : "FALSE")
+                                  .arg(path).arg(secure).arg(expiry)
+                                  .arg(name).arg(value);
             }
-            cookies = parts.join("; ");
+            cookies = lines.join("\n");
         }
 
         if (!url.isEmpty()) {
@@ -170,6 +182,7 @@ void PipeServer::handleMessage(QLocalSocket* sock, const QByteArray& json) {
         QStringList cookieLines;
         if (msg["cookies"].isArray()) {
             for (const auto& c : msg["cookies"].toArray()) {
+                if (!c.isObject()) continue;
                 auto co         = c.toObject();
                 QString domain  = co["domain"].toString();
                 bool subdomains = domain.startsWith(".");

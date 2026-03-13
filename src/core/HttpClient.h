@@ -50,9 +50,10 @@ public:
         std::stop_token             stopToken,
         ProgressCallback            onProgress = {});
 
-    /// Set cookies to be sent with all subsequent requests.
-    /// Format: "name1=value1; name2=value2" (libcurl CURLOPT_COOKIE).
-    void setCookies(std::string cookies);
+    /// Set cookies to be sent with subsequent requests.
+    /// Format: newline-separated Netscape TSV cookie lines (domain, path, etc.).
+    /// Curl handles domain/path matching so cookies are only sent to matching hosts.
+    void setCookies(const std::string& cookies);
 
     /// Call once from main() before any threads.
     static void globalInit();

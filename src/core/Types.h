@@ -14,7 +14,7 @@ namespace checkdown {
 inline constexpr int         kDefaultSegmentCount  = 8;
 inline constexpr int         kDefaultMaxConcurrent = 3;
 inline constexpr std::size_t kMinSegmentSize        = 256 * 1024;        // 256 KB
-inline constexpr std::size_t kMergeBufferSize       = 64 * 1024;         // 64 KB
+inline constexpr std::size_t kMergeBufferSize       = 1024 * 1024;       // 1 MB
 inline constexpr auto        kProgressInterval      = std::chrono::milliseconds(250);
 inline constexpr const char* kStateFileName          = "checkdown_state.json";
 

@@ -39,8 +39,15 @@ void Logger::rotateIfNeeded() {
         m_file.close();
         auto oldPath = m_path;
         oldPath.replace_extension(".old.log");
+        // Remove the old backup first so rename can succeed
+        std::filesystem::remove(oldPath, ec);
         std::filesystem::rename(m_path, oldPath, ec);
-        m_file.open(m_path, std::ios::trunc);
+        if (ec) {
+            // Rename failed — truncate in place as a fallback
+            m_file.open(m_path, std::ios::trunc);
+        } else {
+            m_file.open(m_path, std::ios::trunc);
+        }
     }
 }
 
@@ -57,7 +64,7 @@ static const char* levelStr(LogLevel l) noexcept {
 void Logger::log(LogLevel level, const char* srcFile, int line, std::string_view msg) {
     if (level < m_minLevel) return;
 
-    // Build timestamp
+    // Build timestamp outside lock (localtime is thread-safe on Windows via localtime_s)
     auto now  = std::chrono::system_clock::now();
     auto t    = std::chrono::system_clock::to_time_t(now);
     auto ms   = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -76,6 +83,7 @@ void Logger::log(LogLevel level, const char* srcFile, int line, std::string_view
     std::string entry = std::format("[{}.{:03d}] [{}] {}:{} {}\n",
         timeBuf, ms.count(), levelStr(level), srcFile, line, msg);
 
+    // All file operations under a single lock
     std::lock_guard lk(m_mutex);
 
     if (!m_file.is_open()) {

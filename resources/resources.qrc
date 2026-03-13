@@ -6,5 +6,7 @@
         <file>checkdown_32.png</file>
         <file>checkdown_48.png</file>
         <file>checkdown_128.png</file>
+        <file>arrow-up.png</file>
+        <file>arrow-down.png</file>
     </qresource>
 </RCC>

@@ -11,6 +11,7 @@
 #include <QStatusBar>
 #include <QLabel>
 #include <QSettings>
+#include <QSortFilterProxyModel>
 #include <memory>
 
 namespace checkdown {
@@ -37,6 +38,9 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private slots:
     void onAddDownload();
@@ -64,15 +68,19 @@ private:
     void registerNativeMessagingHost();
     void updateButtonStates();
     void updateStatusBar();
+    void updateWindowTitle();
+    void applyStylesheet();
     void loadSettings();
     void saveSettings();
 
     int selectedDownloadId() const;
 
     std::unique_ptr<DownloadManager> m_manager;
-    DownloadTableModel*              m_model     = nullptr;
-    ProgressDelegate*                m_delegate  = nullptr;
-    QTableView*                      m_tableView = nullptr;
+    DownloadTableModel*              m_model      = nullptr;
+    QSortFilterProxyModel*           m_proxyModel = nullptr;
+    ProgressDelegate*                m_delegate   = nullptr;
+    QTableView*                      m_tableView  = nullptr;
+    QLabel*                          m_emptyLabel = nullptr;
 
     QAction* m_addAction           = nullptr;
     QAction* m_pauseAction         = nullptr;

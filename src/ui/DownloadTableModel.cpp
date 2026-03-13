@@ -1,5 +1,6 @@
 #include "DownloadTableModel.h"
 
+#include <QColor>
 #include <format>
 #include <cmath>
 
@@ -62,6 +63,17 @@ QVariant DownloadTableModel::data(const QModelIndex& index, int role) const {
     // UserRole+1: DownloadState integer for delegate color selection
     if (role == Qt::UserRole + 1 && index.column() == ColProgress) {
         return static_cast<int>(row.state);
+    }
+
+    // State-based row foreground color
+    if (role == Qt::ForegroundRole) {
+        switch (row.state) {
+            case DownloadState::Completed: return QColor(166, 227, 161); // green
+            case DownloadState::Failed:    return QColor(243, 139, 168); // red
+            case DownloadState::Cancelled: return QColor(108, 112, 134); // muted
+            default: break;
+        }
+        return {};
     }
 
     if (role == Qt::TextAlignmentRole) {

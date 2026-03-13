@@ -16,9 +16,11 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     : QDialog(parent)
 {
     setWindowTitle("Settings");
-    setMinimumWidth(380);
+    setMinimumWidth(400);
 
     auto* layout = new QVBoxLayout(this);
+    layout->setSpacing(12);
+    layout->setContentsMargins(16, 16, 16, 16);
 
     // --- General group ---
     auto* generalGroup  = new QGroupBox("General");

@@ -3,6 +3,7 @@
 #include "../core/Types.h"
 
 #include <QAbstractTableModel>
+#include <QSortFilterProxyModel>
 #include <vector>
 
 namespace checkdown {

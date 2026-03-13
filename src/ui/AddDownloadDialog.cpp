@@ -20,19 +20,24 @@ AddDownloadDialog::AddDownloadDialog(QWidget* parent)
     setMinimumWidth(520);
 
     auto* form = new QFormLayout;
+    form->setSpacing(10);
+    form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
     // URL
     m_urlEdit = new QLineEdit;
     m_urlEdit->setPlaceholderText("https://example.com/file.zip");
+    m_urlEdit->setClearButtonEnabled(true);
     form->addRow("URL:", m_urlEdit);
 
     // File name
     m_fileNameEdit = new QLineEdit;
     m_fileNameEdit->setPlaceholderText("(auto-detected from URL)");
+    m_fileNameEdit->setClearButtonEnabled(true);
     form->addRow("File name:", m_fileNameEdit);
 
     // Save path
     auto* pathLayout = new QHBoxLayout;
+    pathLayout->setSpacing(6);
     m_savePathEdit = new QLineEdit;
     auto defaultDir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
     m_savePathEdit->setText(defaultDir);
@@ -45,6 +50,7 @@ AddDownloadDialog::AddDownloadDialog(QWidget* parent)
     m_segmentSpin = new QSpinBox;
     m_segmentSpin->setRange(1, 32);
     m_segmentSpin->setValue(8);
+    m_segmentSpin->setToolTip("More segments = faster downloads (if the server supports ranges)");
     form->addRow("Segments:", m_segmentSpin);
 
     // Buttons
@@ -52,12 +58,17 @@ AddDownloadDialog::AddDownloadDialog(QWidget* parent)
     auto* okBtn     = new QPushButton("Download");
     auto* cancelBtn = new QPushButton("Cancel");
     okBtn->setDefault(true);
+    okBtn->setMinimumHeight(32);
+    cancelBtn->setMinimumHeight(32);
     btnLayout->addStretch();
-    btnLayout->addWidget(okBtn);
     btnLayout->addWidget(cancelBtn);
+    btnLayout->addWidget(okBtn);
 
     auto* mainLayout = new QVBoxLayout(this);
+    mainLayout->setSpacing(14);
+    mainLayout->setContentsMargins(16, 16, 16, 16);
     mainLayout->addLayout(form);
+    mainLayout->addSpacing(4);
     mainLayout->addLayout(btnLayout);
 
     // Connections
